@@ -51,4 +51,9 @@ int main() {
         send(sock, buffer, strlen(buffer), 0);
         memset(buffer, 0, BUFFER_SIZE);
         int valread = read(sock, buffer, BUFFER_SIZE);
-        printf("Server echoed: 
+        printf("Server echoed: %s\n", buffer);
+    }
+
+    close(sock);
+    return 0;
+}
