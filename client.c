@@ -15,21 +15,21 @@ int main() {
     struct sockaddr_in serverAddr;
     char buffer[1024];
     char fileName[1024];
+    int file;
 
-    // Create the client socket
+    //NET SETUP
     clientSocket = socket(AF_INET, SOCK_STREAM, 0);
     if (clientSocket < 0) {
         perror("Error in socket creation");
         exit(EXIT_FAILURE);
     }
     printf("Client socket created successfully\n");
-
     memset(&serverAddr, '\0', sizeof(serverAddr));
     serverAddr.sin_family = AF_INET;
     serverAddr.sin_port = htons(PORT);
     serverAddr.sin_addr.s_addr = inet_addr("127.0.0.1");
 
-    // Connect to the server socket
+    // CONNECT
     if (connect(clientSocket, (struct sockaddr*)&serverAddr, sizeof(serverAddr)) < 0) {
         perror("Error in connection");
         close(clientSocket);
@@ -38,26 +38,21 @@ int main() {
     printf("Connected to the server\n");
 
     while (1) {
+        // SEND COMMAND, REMOVE FUNNY NEWLINE
         memset(buffer, '\0', sizeof(buffer));
-
-        // Get command from user
         printf("\nEnter a command (e.g., 'get [FILE]', 'exit'): ");
         fgets(buffer, sizeof(buffer), stdin);
-
-        // Remove newline character from input
         buffer[strcspn(buffer, "\n")] = 0;
 
-        // Send the command to the server
         send(clientSocket, buffer, strlen(buffer), 0);
 
-        // Handle the "exit" command
-        if (strcmp(buffer, "exit") == 0) {
+        if (strcmp(buffer, "exit") == 0) // EXIT
+        {
             printf("Exiting...\n");
             break;
         }
-
-        // Handle the "get [FILE]" command
-        if (strncmp(buffer, "get ", 4) == 0) {
+        if (strncmp(buffer, "get ", 4) == 0)  // GET
+        {
             char filePath[1024] = "./client_files/";
             strcat(filePath, buffer + 4);
 
@@ -71,6 +66,7 @@ int main() {
             // Receive file content
             while (1) {
                 memset(buffer, '\0', sizeof(buffer));
+
                 int recvSize = recv(clientSocket, buffer, sizeof(buffer), 0);
                 if (recvSize <= 0) {
                     perror("Error in receiving data");
@@ -78,8 +74,8 @@ int main() {
                 }
 
                 // Check for end-of-file marker
-                if (strcmp(buffer, "!!!!((SDFQSDFZAEPREENDOFAFMSMEOF))") == 0) {
-                    printf("File downloaded successfully.\n");
+                if (recvSize == 3 && strncmp(buffer, "EOF", 3) == 0) {
+                    printf("File download completed successfully.\n");
                     break;
                 }
 
@@ -88,7 +84,35 @@ int main() {
             }
 
             close(file);
-        } else {
+        } else if (strncmp(buffer, "put ", 4) == 0) // PUT
+        {
+            char filePath[1024] = "./client_files/";
+            strcat(filePath, buffer + 4);
+
+            file = open(filePath, O_RDONLY);
+            if (file < 0) 
+            {
+                char errorMsg[] = "Error: File not found.\n";
+                send(clientSocket, errorMsg, strlen(errorMsg), 0);
+            } 
+            // certified C moment
+            else 
+            {
+                char fileBuffer[1024];
+                int bytesRead;
+                while ((bytesRead = read(file, fileBuffer, sizeof(fileBuffer))) > 0) 
+                {
+                    send(clientSocket, fileBuffer, bytesRead, 0);
+                }
+                close(file);
+
+                // ITS JOEVER
+                char endOfFile[] = "EOF";
+                send(clientSocket, endOfFile, strlen(endOfFile), 0);
+                printf("File sent successfully.\n");
+            }
+        } else 
+        {
             // Handle other responses from the server
             memset(buffer, '\0', sizeof(buffer));
             int recvSize = recv(clientSocket, buffer, sizeof(buffer), 0);
