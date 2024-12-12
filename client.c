@@ -51,7 +51,18 @@ int main() {
             printf("Exiting...\n");
             break;
         }
-        if (strncmp(buffer, "get ", 4) == 0) // GET
+        else if (strcmp(buffer, "list") == 0) // LIST
+        {
+            // Receive the file list from the server
+            memset(buffer, '\0', sizeof(buffer));
+            int recvSize = recv(clientSocket, buffer, sizeof(buffer), 0);
+            if (recvSize > 0) {
+                printf("Files on server:\n%s\n", buffer);
+            } else {
+                perror("Error receiving file list");
+            }
+        }
+        else if (strncmp(buffer, "get ", 4) == 0) // GET
         {
             char filePath[1024] = "./client_files/";
             strcat(filePath, buffer + 4);
