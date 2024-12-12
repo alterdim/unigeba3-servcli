@@ -96,10 +96,10 @@ int main() {
         } 
         else if (strncmp(buffer, "get ", 4) == 0)
         {
-            char fileName[1024];
-            strcpy(fileName, buffer + 4); 
+            char filePath[1024] = "./server_files/";
+            strcat(filePath, buffer + 4);
 
-            file = open(fileName, O_RDONLY);
+            file = open(filePath, O_RDONLY);
             if (file < 0) 
             {
                 char errorMsg[] = "Error: File not found.\n";
@@ -117,7 +117,7 @@ int main() {
                 close(file);
 
                 // ITS JOEVER
-                char endOfFile[] = "EOF";
+                char endOfFile[] = "!!!!((SDFQSDFZAEPREENDOFAFMSMEOF))";
                 send(newSocket, endOfFile, strlen(endOfFile), 0);
             }
         } 

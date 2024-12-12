@@ -58,10 +58,11 @@ int main() {
 
         // Handle the "get [FILE]" command
         if (strncmp(buffer, "get ", 4) == 0) {
-            char *fileName = buffer + 4; // Extract file name from command
+            char filePath[1024] = "./client_files/";
+            strcat(filePath, buffer + 4);
 
             // Open a file to save the downloaded content
-            int file = open(fileName, O_WRONLY | O_CREAT | O_TRUNC, 0666);
+            int file = open(filePath, O_WRONLY | O_CREAT | O_TRUNC, 0666);
             if (file < 0) {
                 perror("Error in creating file");
                 continue;
@@ -77,7 +78,7 @@ int main() {
                 }
 
                 // Check for end-of-file marker
-                if (strcmp(buffer, "EOF") == 0) {
+                if (strcmp(buffer, "!!!!((SDFQSDFZAEPREENDOFAFMSMEOF))") == 0) {
                     printf("File downloaded successfully.\n");
                     break;
                 }
