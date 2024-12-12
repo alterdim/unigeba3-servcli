@@ -1,66 +1,139 @@
-#include <stdio.h>
-#include <stdlib.h>
-#include <string.h>
-#include <unistd.h>
-#include <netinet/in.h>
-#include <sys/socket.h>
+#include<stdio.h>
+#include<stdlib.h>
+#include<string.h>
+#include<sys/types.h>
+#include<sys/socket.h>
+#include<netinet/in.h>
+#include<arpa/inet.h>
+#include<unistd.h>
+#include<dirent.h> // Required for listing directory contents
+#include<fcntl.h>
 
-#define PORT 8080
-#define BUFFER_SIZE 1024
+#define PORT 4455
 
 int main() {
-    int server_fd, new_socket;
-    struct sockaddr_in address;
-    int addrlen = sizeof(address);
-    char buffer[BUFFER_SIZE] = {0};
-    
-    // Creating socket file descriptor
-    if ((server_fd = socket(AF_INET, SOCK_STREAM, 0)) == 0) {
-        perror("Socket failed");
+    int sockfd;
+    struct sockaddr_in serverAddr;
+
+    int newSocket;
+    struct sockaddr_in newAddr;
+
+    socklen_t addr_size;
+
+    char buffer[1024];
+
+    int file;
+
+    // Create the server socket
+    sockfd = socket(AF_INET, SOCK_STREAM, 0);
+    if (sockfd < 0) {
+        perror("Error in socket creation");
         exit(EXIT_FAILURE);
     }
+    printf("\nServer socket created\n");
 
-    // Setting up the address structure
-    address.sin_family = AF_INET;
-    address.sin_addr.s_addr = INADDR_ANY;
-    address.sin_port = htons(PORT);
+    // Fill the server address structure with 0
+    memset(&serverAddr, '\0', sizeof(serverAddr));
 
-    // Binding the socket
-    if (bind(server_fd, (struct sockaddr *)&address, sizeof(address)) < 0) {
+    serverAddr.sin_family = AF_INET;
+    serverAddr.sin_port = htons(PORT);
+    serverAddr.sin_addr.s_addr = inet_addr("127.0.0.1");
+
+    // Bind the socket to the specified address and port
+    if (bind(sockfd, (struct sockaddr*)&serverAddr, sizeof(serverAddr)) < 0) {
         perror("Bind failed");
-        close(server_fd);
+        close(sockfd);
         exit(EXIT_FAILURE);
     }
+    printf("\nBinded to port %d\n", PORT);
 
-    // Listening for connections
-    if (listen(server_fd, 3) < 0) {
-        perror("Listen failed");
-        close(server_fd);
+    // Listen for incoming connections
+    listen(sockfd, 5);
+    printf("Listening...\n");
+
+    addr_size = sizeof(newAddr);
+
+    // Accept incoming connection
+    newSocket = accept(sockfd, (struct sockaddr*)&newAddr, &addr_size);
+    if (newSocket < 0) {
+        perror("Error in accepting connection");
+        close(sockfd);
         exit(EXIT_FAILURE);
     }
-    printf("Server is listening on port %d\n", PORT);
+    printf("Client connected.\n");
 
-    // Accepting a client connection
-    if ((new_socket = accept(server_fd, (struct sockaddr *)&address, (socklen_t*)&addrlen)) < 0) {
-        perror("Accept failed");
-        close(server_fd);
-        exit(EXIT_FAILURE);
-    }
-
-    // Communication loop
+    // Server command handling loop
     while (1) {
-        memset(buffer, 0, BUFFER_SIZE);
-        int valread = read(new_socket, buffer, BUFFER_SIZE);
-        if (valread > 0) {
-            printf("Received: %s\n", buffer);
-            send(new_socket, buffer, strlen(buffer), 0);
-        } else {
-            printf("Client disconnected\n");
+        memset(buffer, '\0', sizeof(buffer));
+
+        // Receive command from client
+        int recvSize = recv(newSocket, buffer, sizeof(buffer), 0);
+        if (recvSize <= 0) {
+            perror("Error in receiving data or client disconnected");
             break;
+        }
+        printf("Command received: %s\n", buffer);
+
+        // LIST
+        if (strncmp(buffer, "list", 4) == 0) {
+            DIR *d;
+            struct dirent *dir;
+            char fileList[1024] = "";
+
+            d = opendir("./server_files");
+            if (d) {
+                while ((dir = readdir(d)) != NULL) {
+                    strcat(fileList, dir->d_name);
+                    strcat(fileList, "\n");
+                }
+                closedir(d);
+            } else {
+                strcpy(fileList, "Error: Could not open directory.\n");
+            }
+
+            send(newSocket, fileList, strlen(fileList), 0);
+        // GET
+        } 
+        else if (strncmp(buffer, "get ", 4) == 0)
+        {
+            char fileName[1024];
+            strcpy(fileName, buffer + 4); 
+
+            file = open(fileName, O_RDONLY);
+            if (file < 0) 
+            {
+                char errorMsg[] = "Error: File not found.\n";
+                send(newSocket, errorMsg, strlen(errorMsg), 0);
+            } 
+            // certified C moment
+            else 
+            {
+                char fileBuffer[1024];
+                int bytesRead;
+                while ((bytesRead = read(file, fileBuffer, sizeof(fileBuffer))) > 0) 
+                {
+                    send(newSocket, fileBuffer, bytesRead, 0);
+                }
+                close(file);
+
+                // ITS JOEVER
+                char endOfFile[] = "EOF";
+                send(newSocket, endOfFile, strlen(endOfFile), 0);
+            }
+        } 
+        else if (strncmp(buffer, "exit", 4) == 0) {
+            printf("Exiting...\n");
+            break;
+        }
+        else {
+            char unknownCommand[] = "Unknown command.\n";
+            send(newSocket, unknownCommand, strlen(unknownCommand), 0);
         }
     }
 
-    close(new_socket);
-    close(server_fd);
+    close(newSocket);
+    close(sockfd);
+
+    printf("Server shut down.\n");
     return 0;
 }

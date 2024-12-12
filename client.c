@@ -1,59 +1,104 @@
-#include <stdio.h>
-#include <stdlib.h>
-#include <string.h>
-#include <unistd.h>
-#include <arpa/inet.h>
-#include <netinet/in.h>
+#include<stdio.h>
+#include<stdlib.h>
+#include<string.h>
+#include<sys/types.h>
+#include<sys/socket.h>
+#include<netinet/in.h>
+#include<arpa/inet.h>
+#include<unistd.h>
+#include<fcntl.h>  // For file operations
 
-#define PORT 8080
-#define BUFFER_SIZE 1024
+#define PORT 4455
 
 int main() {
-    int sock = 0;
-    struct sockaddr_in serv_addr;
-    char buffer[BUFFER_SIZE] = {0};
+    int clientSocket;
+    struct sockaddr_in serverAddr;
+    char buffer[1024];
+    char fileName[1024];
 
-    // Creating socket
-    if ((sock = socket(AF_INET, SOCK_STREAM, 0)) < 0) {
-        perror("Socket creation error");
+    // Create the client socket
+    clientSocket = socket(AF_INET, SOCK_STREAM, 0);
+    if (clientSocket < 0) {
+        perror("Error in socket creation");
         exit(EXIT_FAILURE);
     }
+    printf("Client socket created successfully\n");
 
-    // Setting up the server address structure
-    serv_addr.sin_family = AF_INET;
-    serv_addr.sin_port = htons(PORT);
+    memset(&serverAddr, '\0', sizeof(serverAddr));
+    serverAddr.sin_family = AF_INET;
+    serverAddr.sin_port = htons(PORT);
+    serverAddr.sin_addr.s_addr = inet_addr("127.0.0.1");
 
-    // Convert IPv4 and IPv6 addresses from text to binary form
-    if (inet_pton(AF_INET, "127.0.0.1", &serv_addr.sin_addr) <= 0) {
-        perror("Invalid address or Address not supported");
-        close(sock);
+    // Connect to the server socket
+    if (connect(clientSocket, (struct sockaddr*)&serverAddr, sizeof(serverAddr)) < 0) {
+        perror("Error in connection");
+        close(clientSocket);
         exit(EXIT_FAILURE);
     }
+    printf("Connected to the server\n");
 
-    // Connecting to server
-    if (connect(sock, (struct sockaddr *)&serv_addr, sizeof(serv_addr)) < 0) {
-        perror("Connection failed");
-        close(sock);
-        exit(EXIT_FAILURE);
-    }
-
-    // Communication loop
     while (1) {
-        printf("Enter message: ");
-        fgets(buffer, BUFFER_SIZE, stdin);
-        buffer[strcspn(buffer, "\n")] = 0;  // Remove newline character
+        memset(buffer, '\0', sizeof(buffer));
 
-        if (strlen(buffer) == 0) {
+        // Get command from user
+        printf("\nEnter a command (e.g., 'get [FILE]', 'exit'): ");
+        fgets(buffer, sizeof(buffer), stdin);
+
+        // Remove newline character from input
+        buffer[strcspn(buffer, "\n")] = 0;
+
+        // Send the command to the server
+        send(clientSocket, buffer, strlen(buffer), 0);
+
+        // Handle the "exit" command
+        if (strcmp(buffer, "exit") == 0) {
             printf("Exiting...\n");
             break;
         }
 
-        send(sock, buffer, strlen(buffer), 0);
-        memset(buffer, 0, BUFFER_SIZE);
-        int valread = read(sock, buffer, BUFFER_SIZE);
-        printf("Server echoed: %s\n", buffer);
+        // Handle the "get [FILE]" command
+        if (strncmp(buffer, "get ", 4) == 0) {
+            char *fileName = buffer + 4; // Extract file name from command
+
+            // Open a file to save the downloaded content
+            int file = open(fileName, O_WRONLY | O_CREAT | O_TRUNC, 0666);
+            if (file < 0) {
+                perror("Error in creating file");
+                continue;
+            }
+
+            // Receive file content
+            while (1) {
+                memset(buffer, '\0', sizeof(buffer));
+                int recvSize = recv(clientSocket, buffer, sizeof(buffer), 0);
+                if (recvSize <= 0) {
+                    perror("Error in receiving data");
+                    break;
+                }
+
+                // Check for end-of-file marker
+                if (strcmp(buffer, "EOF") == 0) {
+                    printf("File downloaded successfully.\n");
+                    break;
+                }
+
+                // Write received data to the file
+                write(file, buffer, recvSize);
+            }
+
+            close(file);
+        } else {
+            // Handle other responses from the server
+            memset(buffer, '\0', sizeof(buffer));
+            int recvSize = recv(clientSocket, buffer, sizeof(buffer), 0);
+            if (recvSize > 0) {
+                printf("Server Response:\n%s", buffer);
+            }
+        }
     }
 
-    close(sock);
+    close(clientSocket);
+    printf("Connection closed.\n");
+
     return 0;
 }
