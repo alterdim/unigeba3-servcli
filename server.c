@@ -6,7 +6,7 @@
 #include<netinet/in.h>
 #include<arpa/inet.h>
 #include<unistd.h>
-#include<dirent.h> // Required for listing directory contents
+#include<dirent.h>
 #include<fcntl.h>
 
 #define PORT 4455
@@ -174,6 +174,10 @@ int main() {
             } else {
                 printf("Error: Incomplete file transfer.\n");
             }
+        }
+        else
+        {
+            printf("Command not known.\n");
         }
     }
 

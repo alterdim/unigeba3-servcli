@@ -129,12 +129,7 @@ int main() {
             }
         } else 
         {
-            // Handle other responses from the server
-            memset(buffer, '\0', sizeof(buffer));
-            int recvSize = recv(clientSocket, buffer, sizeof(buffer), 0);
-            if (recvSize > 0) {
-                printf("Server Response:\n%s", buffer);
-            }
+            printf("Command not known");
         }
     }
 
