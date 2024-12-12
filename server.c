@@ -92,75 +92,88 @@ int main() {
             }
 
             send(newSocket, fileList, strlen(fileList), 0);
-        // GET
         } 
-        else if (strncmp(buffer, "get ", 4) == 0)
+        else if (strncmp(buffer, "get ", 4) == 0) // GET
         {
             char filePath[1024] = "./server_files/";
             strcat(filePath, buffer + 4);
 
-            file = open(filePath, O_RDONLY);
-            if (file < 0) 
-            {
+            int file = open(filePath, O_RDONLY);
+            if (file < 0) {
+                perror("Error opening file");
                 char errorMsg[] = "Error: File not found.\n";
                 send(newSocket, errorMsg, strlen(errorMsg), 0);
-            } 
-            // certified C moment
-            else 
-            {
+            } else {
+                // Determine the file size
+                off_t fileSize = lseek(file, 0, SEEK_END);
+                lseek(file, 0, SEEK_SET); // Reset file pointer to the beginning
+
+                // Send the file size to the client
+                char sizeBuffer[64];
+                snprintf(sizeBuffer, sizeof(sizeBuffer), "%ld", fileSize);
+                send(newSocket, sizeBuffer, strlen(sizeBuffer), 0);
+                recv(newSocket, buffer, sizeof(buffer), 0); // Wait for ACK
+
+                // Send the file content
                 char fileBuffer[1024];
                 int bytesRead;
-                while ((bytesRead = read(file, fileBuffer, sizeof(fileBuffer))) > 0) 
-                {
+                while ((bytesRead = read(file, fileBuffer, sizeof(fileBuffer))) > 0) {
                     send(newSocket, fileBuffer, bytesRead, 0);
                 }
-                close(file);
 
-                // ITS JOEVER
-                char endOfFile[] = "EOF";
-                send(newSocket, endOfFile, strlen(endOfFile), 0);
+                close(file);
                 printf("File sent successfully.\n");
             }
-        } else if (strncmp(buffer, "exit", 4) == 0) {
+        } 
+        else if (strncmp(buffer, "exit", 4) == 0) 
+        {
             printf("Exiting...\n");
             break;
         }
-        else if (strncmp(buffer, "put ", 4) == 0) {
+        else if (strncmp(buffer, "put ", 4) == 0) // PUT
+        {
             char filePath[1024] = "./server_files/";
             strcat(filePath, buffer + 4);
 
-            // Open a file to save the downloaded content
-            int file = open(filePath, O_WRONLY | O_CREAT | O_TRUNC, 0666);
-            if (file < 0) {
-                perror("Error in creating file");
+            // Receive the file size
+            memset(buffer, '\0', sizeof(buffer));
+            recv(newSocket, buffer, sizeof(buffer), 0);
+            long fileSize = atol(buffer);
+            send(newSocket, "ACK", 3, 0); // Send ACK
+
+            if (fileSize <= 0) {
+                printf("Error: Invalid file size received.\n");
                 continue;
             }
 
-            // Receive file content
-            while (1) {
+            // Open a file to write the received data
+            int file = open(filePath, O_WRONLY | O_CREAT | O_TRUNC, 0666);
+            if (file < 0) {
+                perror("Error creating file");
+                continue;
+            }
+
+            // Receive the file content
+            long bytesReceived = 0;
+            while (bytesReceived < fileSize) {
                 memset(buffer, '\0', sizeof(buffer));
-                
                 int recvSize = recv(newSocket, buffer, sizeof(buffer), 0);
                 if (recvSize <= 0) {
-                    perror("Error in receiving data");
+                    perror("Error receiving data");
                     break;
                 }
 
-                // Check for end-of-file marker
-                if (recvSize == 3 && strncmp(buffer, "EOF", 3) == 0) {
-                    printf("File download completed successfully.\n");
-                    break;
-                }
-
-                // Write received data to the file
                 write(file, buffer, recvSize);
+                bytesReceived += recvSize;
             }
 
             close(file);
-        }
-        else {
-            char unknownCommand[] = "Unknown command.\n";
-            send(newSocket, unknownCommand, strlen(unknownCommand), 0);
+
+            if (bytesReceived == fileSize) {
+                printf("File download completed successfully.\n");
+            } else {
+                printf("Error: Incomplete file transfer.\n");
+            }
         }
     }
 
