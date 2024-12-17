@@ -27,7 +27,28 @@ int main() {
     memset(&serverAddr, '\0', sizeof(serverAddr));
     serverAddr.sin_family = AF_INET;
     serverAddr.sin_port = htons(PORT);
-    serverAddr.sin_addr.s_addr = inet_addr("127.0.0.1");
+
+    char ipAddr[30];
+
+    printf("IP : ");
+    if (fgets(ipAddr, sizeof(ipAddr), stdin) == NULL) {
+        // Handle EOF or read error
+        fprintf(stderr, "Error reading input.\n");
+        return 1;
+    }
+
+    // Remove the trailing newline if it exists
+    char *newline = strchr(ipAddr, '\n');
+    if (newline != NULL) {
+        *newline = '\0';
+    }
+
+    // Convert IP address from text to binary form
+    serverAddr.sin_addr.s_addr = inet_addr(ipAddr);
+    if (serverAddr.sin_addr.s_addr == INADDR_NONE) {
+        fprintf(stderr, "Invalid IP address.\n");
+        return 1;
+    }
 
     // CONNECT
     if (connect(clientSocket, (struct sockaddr*)&serverAddr, sizeof(serverAddr)) < 0) {
@@ -36,7 +57,7 @@ int main() {
         exit(EXIT_FAILURE);
     }
     printf("Connected to the server\n");
-
+    sleep(0.1);
     while (1) {
         // SEND COMMAND, REMOVE FUNNY NEWLINE
         memset(buffer, '\0', sizeof(buffer));

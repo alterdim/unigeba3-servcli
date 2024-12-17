@@ -21,10 +21,10 @@ void handle_client(int client_socket) {
         // Receive command from client
         int recvSize = recv(client_socket, buffer, sizeof(buffer), 0);
         if (recvSize <= 0) {
-            perror("Error in receiving data or client disconnected");
+            perror("Client left.");
             break;
         }
-        printf("Command received: %s\n", buffer);
+        printf("Client sent command %s\n", buffer);
 
         // LIST
         if (strncmp(buffer, "list", 4) == 0) {
@@ -45,7 +45,7 @@ void handle_client(int client_socket) {
                 }
                 closedir(d);
             } else {
-                strcpy(fileList, "Error: Could not open directory.\n");
+                strcpy(fileList, "IO ERROR\n");
             }
 
             send(client_socket, fileList, strlen(fileList), 0);
@@ -57,8 +57,8 @@ void handle_client(int client_socket) {
 
             int file = open(filePath, O_RDONLY);
             if (file < 0) {
-                perror("Error opening file");
-                char errorMsg[] = "Error: File not found.\n";
+                perror("FILE NOT FOUND");
+                char errorMsg[] = "FLIE NOT FOUND.\n";
                 send(client_socket, errorMsg, strlen(errorMsg), 0);
             } else {
                 // Determine the file size
@@ -79,7 +79,7 @@ void handle_client(int client_socket) {
                 }
 
                 close(file);
-                printf("File sent successfully.\n");
+                printf("FILE OK.\n");
             }
         } 
         else if (strncmp(buffer, "exit", 4) == 0) 
@@ -99,14 +99,14 @@ void handle_client(int client_socket) {
             send(client_socket, "ACK", 3, 0); // Send ACK
 
             if (fileSize <= 0) {
-                printf("Error: Invalid file size received.\n");
+                printf("FILE TRANSFER ERROR.\n");
                 continue;
             }
 
             // Open a file to write the received data
             int file = open(filePath, O_WRONLY | O_CREAT | O_TRUNC, 0666);
             if (file < 0) {
-                perror("Error creating file");
+                perror("IO ERROR");
                 continue;
             }
 
@@ -116,7 +116,7 @@ void handle_client(int client_socket) {
                 memset(buffer, '\0', sizeof(buffer));
                 int recvSize = recv(client_socket, buffer, sizeof(buffer), 0);
                 if (recvSize <= 0) {
-                    perror("Error receiving data");
+                    perror("I HOPE YOU DONT GET THIS ERROR BECAUSE ITS GOING TO BE PAINFUL TO FIX");
                     break;
                 }
 
@@ -127,9 +127,9 @@ void handle_client(int client_socket) {
             close(file);
 
             if (bytesReceived == fileSize) {
-                printf("File download completed successfully.\n");
+                printf("DOWNLOAD SUCCESSFUL\n");
             } else {
-                printf("Error: Incomplete file transfer.\n");
+                printf("INCOMPLETE FILETRANSFER\n");
             }
         }
         else
@@ -139,7 +139,7 @@ void handle_client(int client_socket) {
     }
 
     close(client_socket);
-    printf("Client disconnected.\n");
+    printf("Client left.\n");
     exit(0);
 }
 
@@ -158,10 +158,10 @@ int main() {
     // Create the server socket
     sockfd = socket(AF_INET, SOCK_STREAM, 0);
     if (sockfd < 0) {
-        perror("Error in socket creation");
+        perror("Socket error.");
         exit(EXIT_FAILURE);
     }
-    printf("\nServer socket created\n");
+    printf("\nSocket created ! Waiting for connections.\n");
 
     // Fill the server address structure with 0
     memset(&serverAddr, '\0', sizeof(serverAddr));
@@ -172,15 +172,15 @@ int main() {
 
     // Bind the socket to the specified address and port
     if (bind(sockfd, (struct sockaddr*)&serverAddr, sizeof(serverAddr)) < 0) {
-        perror("Bind failed");
+        perror("Bind did not go well");
         close(sockfd);
         exit(EXIT_FAILURE);
     }
-    printf("\nBinded to port %d\n", PORT);
+    printf("\nBinded to port %d\n successfully", PORT);
 
     // Listen for incoming connections
-    listen(sockfd, 5);
-    printf("Listening...\n");
+    listen(sockfd, 6);
+    printf("Waiting...\n");
 
     addr_size = sizeof(newAddr);
 
@@ -191,7 +191,7 @@ int main() {
             perror("Error in accepting connection");
             continue;
         }
-        printf("Client connected.\n");
+        printf("Client joined.\n");
 
         // Fork a new process to handle the client
         pid_t child_pid = fork();
