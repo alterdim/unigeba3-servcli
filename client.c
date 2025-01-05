@@ -6,7 +6,7 @@
 #include <netinet/in.h>
 #include <arpa/inet.h>
 #include <unistd.h>
-#include <fcntl.h>  // For file operations
+#include <fcntl.h>
 #include <errno.h>
 
 #define PORT 4455
@@ -16,7 +16,7 @@ int main() {
     struct sockaddr_in serverAddr;
     char buffer[1024];
 
-    // 1) Create client socket
+    // client socket
     clientSocket = socket(AF_INET, SOCK_STREAM, 0);
     if (clientSocket < 0) {
         perror("Error in socket creation");
@@ -24,12 +24,12 @@ int main() {
     }
     printf("Client socket created successfully.\n");
 
-    // 2) Setup server address
+    // server setup
     memset(&serverAddr, 0, sizeof(serverAddr));
     serverAddr.sin_family = AF_INET;
     serverAddr.sin_port = htons(PORT);
 
-    // Ask for server IP
+    // ip input
     char ipAddr[64];
     printf("Server IP (e.g. 127.0.0.1): ");
     if (fgets(ipAddr, sizeof(ipAddr), stdin) == NULL) {
@@ -37,7 +37,7 @@ int main() {
         close(clientSocket);
         return 1;
     }
-    ipAddr[strcspn(ipAddr, "\n")] = '\0'; // remove trailing newline
+    ipAddr[strcspn(ipAddr, "\n")] = '\0'; 
 
     serverAddr.sin_addr.s_addr = inet_addr(ipAddr);
     if (serverAddr.sin_addr.s_addr == INADDR_NONE) {
@@ -46,7 +46,7 @@ int main() {
         return 1;
     }
 
-    // 3) Connect to server
+    // connect
     if (connect(clientSocket, (struct sockaddr*)&serverAddr, sizeof(serverAddr)) < 0) {
         perror("Error in connection");
         close(clientSocket);
@@ -54,31 +54,31 @@ int main() {
     }
     printf("Connected to the server.\n");
 
-    // 4) Main loop
+    // MAINLOOP
     while (1) {
-        // Prompt user
+        // INPUT
         memset(buffer, 0, sizeof(buffer));
         printf("\nEnter command (list, get <f>, put <f>, rename <old> <new>, exit): ");
         if (!fgets(buffer, sizeof(buffer), stdin)) {
-            // EOF or error reading
+            // erm so that happened ? EOF error ig
             break;
         }
-        // Remove trailing newline
+    
         buffer[strcspn(buffer, "\n")] = '\0';
 
         if (strlen(buffer) == 0) {
             continue;  // empty line
         }
 
-        // ===================== EXIT =====================
+        // EXIT
         if (strcmp(buffer, "exit") == 0) {
-            // Send "exit" to server
+            
             send(clientSocket, buffer, strlen(buffer), 0);
             printf("Exiting...\n");
             break;
         }
 
-        // ===================== LIST =====================
+        // LIST
         else if (strcmp(buffer, "list") == 0) {
             // Send "list" command
             send(clientSocket, buffer, strlen(buffer), 0);
@@ -94,14 +94,11 @@ int main() {
             }
         }
 
-        // ===================== GET ======================
+        // GET
         else if (strncmp(buffer, "get ", 4) == 0) {
-            // Example: "get filename"
-
-            // 1) Parse out the filename *now*, before overwriting buffer
             char userCmd[256];
             strncpy(userCmd, buffer, sizeof(userCmd) - 1);
-            userCmd[sizeof(userCmd) - 1] = '\0'; // ensure termination
+            userCmd[sizeof(userCmd) - 1] = '\0';
 
             char dummy[10], requestedFile[256];
             if (sscanf(userCmd, "%s %255s", dummy, requestedFile) != 2) {
@@ -109,10 +106,9 @@ int main() {
                 continue;
             }
 
-            // 2) Send the "get filename" command
+
             send(clientSocket, buffer, strlen(buffer), 0);
 
-            // 3) Receive file size from server
             memset(buffer, 0, sizeof(buffer));
             int recvSize = recv(clientSocket, buffer, sizeof(buffer) - 1, 0);
             if (recvSize <= 0) {
@@ -122,7 +118,7 @@ int main() {
             buffer[recvSize] = '\0';
             long fileSize = atol(buffer);
 
-            // 4) Send ACK
+            // isn't it tcp's job to do this for me
             send(clientSocket, "ACK", 3, 0);
 
             if (fileSize <= 0) {
@@ -130,19 +126,16 @@ int main() {
                 continue;
             }
 
-            // 5) Open local file in ./client_files/
             char localPath[512] = "./client_files/";
             strcat(localPath, requestedFile);
 
             int fd = open(localPath, O_WRONLY | O_CREAT | O_TRUNC, 0666);
             if (fd < 0) {
                 perror("Error creating local file for GET");
-                // Drain the incoming file data so the socket isn't out of sync
                 long bytesToDiscard = fileSize;
                 while (bytesToDiscard > 0) {
                     char tmp[512];
-                    int n = recv(clientSocket, tmp, (bytesToDiscard < (long)sizeof(tmp) 
-                                      ? bytesToDiscard : (long)sizeof(tmp)), 0);
+                    int n = recv(clientSocket, tmp, (bytesToDiscard < (long)sizeof(tmp) ? bytesToDiscard : (long)sizeof(tmp)), 0); // wow that's ugly
                     if (n <= 0) break;
                     bytesToDiscard -= n;
                 }
@@ -170,38 +163,27 @@ int main() {
             }
         }
 
-        // ===================== PUT ======================
+        // put
         else if (strncmp(buffer, "put ", 4) == 0) {
-            // Example: "put filename"
-            // 1) Send command
             send(clientSocket, buffer, strlen(buffer), 0);
-
-            // 2) Parse local filename
             char localFile[256];
             sscanf(buffer + 4, "%255s", localFile);
-
-            // 3) Open file in ./client_files/
             char filePath[512] = "./client_files/";
             strcat(filePath, localFile);
-
             int file = open(filePath, O_RDONLY);
             if (file < 0) {
                 perror("Error opening file for PUT");
-                // send "0" for file size so server doesn't block
                 char zeroSize[] = "0";
                 send(clientSocket, zeroSize, strlen(zeroSize), 0);
                 continue;
             }
 
-            // 4) Send file size
             off_t fileSize = lseek(file, 0, SEEK_END);
             lseek(file, 0, SEEK_SET);
 
             char sizeBuffer[64];
             snprintf(sizeBuffer, sizeof(sizeBuffer), "%ld", (long)fileSize);
             send(clientSocket, sizeBuffer, strlen(sizeBuffer), 0);
-
-            // 5) Wait for ACK
             memset(buffer, 0, sizeof(buffer));
             recv(clientSocket, buffer, sizeof(buffer), 0);
             if (strncmp(buffer, "ACK", 3) != 0) {
@@ -210,7 +192,6 @@ int main() {
                 continue;
             }
 
-            // 6) Send file data
             off_t bytesSent = 0;
             while (bytesSent < fileSize) {
                 char fileBuf[1024];
@@ -229,17 +210,14 @@ int main() {
                 printf("File upload incomplete.\n");
             }
         }
-
-        // ========== RENAME (LOCALLY + THEN PUT) =========
         else if (strncmp(buffer, "rename ", 7) == 0) {
-            // format: "rename old_filename new_filename"
+
             char oldFile[256], newFile[256];
             if (sscanf(buffer + 7, "%255s %255s", oldFile, newFile) != 2) {
                 printf("Usage: rename <old_filename> <new_filename>\n");
                 continue;
             }
 
-            // 1) Locally rename the file
             char oldPath[512] = "./client_files/";
             strcat(oldPath, oldFile);
             char newPath[512] = "./client_files/";
@@ -250,17 +228,14 @@ int main() {
                 continue;
             }
 
-            printf("Local rename successful. Now uploading '%s' as normal PUT.\n", newFile);
+            printf("Uploading '%s' as PUT.\n", newFile);
 
-            // 2) Reuse "put newFile" logic
-            // Build the put command
             char putCommand[512];
+            // Masquerade as put command
             snprintf(putCommand, sizeof(putCommand), "put %s", newFile);
 
-            // Send "put newFile"
             send(clientSocket, putCommand, strlen(putCommand), 0);
 
-            // Open the newly renamed file
             int file = open(newPath, O_RDONLY);
             if (file < 0) {
                 perror("Error opening file after rename");
@@ -270,7 +245,7 @@ int main() {
                 continue;
             }
 
-            // 3) Send file size
+
             off_t fileSize = lseek(file, 0, SEEK_END);
             lseek(file, 0, SEEK_SET);
 
